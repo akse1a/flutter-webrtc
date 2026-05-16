@@ -35,6 +35,9 @@ public class OutgoingVideoFiltersController {
         }
         VideoFrame next = slot.filter.process(current);
         if (next != current) {
+          if (current != input) {
+            current.release();
+          }
           current = next;
         }
       }
@@ -182,7 +185,9 @@ public class OutgoingVideoFiltersController {
     public VideoFrame process(VideoFrame input) {
       VideoFrame.Buffer inBuf = input.getBuffer();
       VideoFrame.I420Buffer i420 = inBuf.toI420();
-      inBuf.release();
+      // Do not call inBuf.release() here: [VideoFrame] is still owned by the capturer path;
+      // [LocalVideoTrack.onFrameCaptured] releases the original frame when the filter returns
+      // a replacement.
 
       int w = i420.getWidth();
       int h = i420.getHeight();
@@ -208,42 +213,42 @@ public class OutgoingVideoFiltersController {
     static VideoFrame.I420Buffer downscaleNearest(VideoFrame.I420Buffer src, int dstW, int dstH) {
       JavaI420Buffer dst = JavaI420Buffer.allocate(dstW, dstH);
       scalePlaneNearest(
-          src.getDataY(), src.getStrideY(), src.getWidth(), src.getHeight(),
-          dst.getDataY(), dst.getStrideY(), dstW, dstH);
+              src.getDataY(), src.getStrideY(), src.getWidth(), src.getHeight(),
+              dst.getDataY(), dst.getStrideY(), dstW, dstH);
       int srcChW = (src.getWidth() + 1) / 2;
       int srcChH = (src.getHeight() + 1) / 2;
       int dstChW = (dstW + 1) / 2;
       int dstChH = (dstH + 1) / 2;
       scalePlaneNearest(
-          src.getDataU(), src.getStrideU(), srcChW, srcChH,
-          dst.getDataU(), dst.getStrideU(), dstChW, dstChH);
+              src.getDataU(), src.getStrideU(), srcChW, srcChH,
+              dst.getDataU(), dst.getStrideU(), dstChW, dstChH);
       scalePlaneNearest(
-          src.getDataV(), src.getStrideV(), srcChW, srcChH,
-          dst.getDataV(), dst.getStrideV(), dstChW, dstChH);
+              src.getDataV(), src.getStrideV(), srcChW, srcChH,
+              dst.getDataV(), dst.getStrideV(), dstChW, dstChH);
       return dst;
     }
 
     static JavaI420Buffer upscaleNearest(VideoFrame.I420Buffer src, int dstW, int dstH) {
       JavaI420Buffer dst = JavaI420Buffer.allocate(dstW, dstH);
       scalePlaneNearest(
-          src.getDataY(), src.getStrideY(), src.getWidth(), src.getHeight(),
-          dst.getDataY(), dst.getStrideY(), dstW, dstH);
+              src.getDataY(), src.getStrideY(), src.getWidth(), src.getHeight(),
+              dst.getDataY(), dst.getStrideY(), dstW, dstH);
       int srcChW = (src.getWidth() + 1) / 2;
       int srcChH = (src.getHeight() + 1) / 2;
       int dstChW = (dstW + 1) / 2;
       int dstChH = (dstH + 1) / 2;
       scalePlaneNearest(
-          src.getDataU(), src.getStrideU(), srcChW, srcChH,
-          dst.getDataU(), dst.getStrideU(), dstChW, dstChH);
+              src.getDataU(), src.getStrideU(), srcChW, srcChH,
+              dst.getDataU(), dst.getStrideU(), dstChW, dstChH);
       scalePlaneNearest(
-          src.getDataV(), src.getStrideV(), srcChW, srcChH,
-          dst.getDataV(), dst.getStrideV(), dstChW, dstChH);
+              src.getDataV(), src.getStrideV(), srcChW, srcChH,
+              dst.getDataV(), dst.getStrideV(), dstChW, dstChH);
       return dst;
     }
 
     private static void scalePlaneNearest(
-        ByteBuffer src, int srcStride, int srcW, int srcH,
-        ByteBuffer dst, int dstStride, int dstW, int dstH) {
+            ByteBuffer src, int srcStride, int srcW, int srcH,
+            ByteBuffer dst, int dstStride, int dstW, int dstH) {
       for (int y = 0; y < dstH; y++) {
         int sy = (int) ((y + 0.5f) * srcH / dstH);
         if (sy >= srcH) {

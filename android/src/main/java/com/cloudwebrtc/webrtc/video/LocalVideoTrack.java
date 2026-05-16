@@ -66,13 +66,23 @@ public class LocalVideoTrack extends LocalTrack implements VideoProcessor {
     @Override
     public void onFrameCaptured(VideoFrame videoFrame) {
         if (sink != null) {
-            videoFrame = outgoingVideoFilters.apply(videoFrame);
+            VideoFrame in = videoFrame;
+            VideoFrame out = outgoingVideoFilters.apply(in);
             synchronized (processors) {
                 for (ExternalVideoFrameProcessing processor : processors) {
-                    videoFrame = processor.onFrame(videoFrame);
+                    VideoFrame next = processor.onFrame(out);
+                    if (next != out) {
+                        if (out != in) {
+                            out.release();
+                        }
+                        out = next;
+                    }
                 }
             }
-            sink.onFrame(videoFrame);
+            if (out != in) {
+                in.release();
+            }
+            sink.onFrame(out);
         }
     }
 }
