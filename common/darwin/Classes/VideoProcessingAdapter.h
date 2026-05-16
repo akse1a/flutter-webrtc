@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <WebRTC/WebRTC.h>
 
+@class OutgoingVideoFilterEngine;
+
 @protocol ExternalVideoProcessingDelegate
 - (RTC_OBJC_TYPE(RTCVideoFrame) * _Nonnull)onFrame:(RTC_OBJC_TYPE(RTCVideoFrame) * _Nonnull)frame;
 @end
@@ -14,5 +16,7 @@
 - (void)removeProcessing:(_Nonnull id<ExternalVideoProcessingDelegate>)processor;
 
 - (RTCVideoSource* _Nonnull) source;
+
+@property(nonatomic, strong, readonly) OutgoingVideoFilterEngine *outgoingFilterEngine;
 
 @end

@@ -30,6 +30,7 @@
 #import "LocalTrack.h"
 #import "LocalAudioTrack.h"
 #import "LocalVideoTrack.h"
+#import "OutgoingVideoFilterEngine.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -796,6 +797,10 @@ static FlutterWebRTCPlugin *sharedSingleton;
   } else if ([@"trackDispose" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
     NSString* trackId = argsMap[@"trackId"];
+    id<LocalTrack> outgoingLocalTrack = [_localTracks objectForKey:trackId];
+    if ([outgoingLocalTrack isKindOfClass:[LocalVideoTrack class]]) {
+      [(LocalVideoTrack*)outgoingLocalTrack clearOutgoingVideoFilters];
+    }
     BOOL audioTrack = NO;
     for (NSString* streamId in self.localStreams) {
       RTCMediaStream* stream = [self.localStreams objectForKey:streamId];
@@ -825,6 +830,121 @@ static FlutterWebRTCPlugin *sharedSingleton;
     FlutterRTCVideoRenderer *renderer = [self findRendererByTrackId:trackId];
     if(renderer != nil) {
       renderer.videoTrack = nil;
+    }
+    result(nil);
+  } else if ([@"outgoingVideoFiltersRegister" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    NSString* filterId = argsMap[@"filterId"];
+    NSDictionary* config = argsMap[@"config"];
+    id<LocalTrack> track = [_localTracks objectForKey:trackId];
+    if (![track isKindOfClass:[LocalVideoTrack class]]) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersRegister"
+                                 message:@"track not found or not a local video track"
+                                 details:nil]);
+      return;
+    }
+    LocalVideoTrack* lvt = (LocalVideoTrack*)track;
+    if (lvt.processing == nil) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersRegister"
+                                 message:@"VideoProcessingAdapter missing for track"
+                                 details:nil]);
+      return;
+    }
+    NSError* err = nil;
+    BOOL ok = [lvt.processing.outgoingFilterEngine registerFilterWithId:filterId
+                                                                   config:config
+                                                                    error:&err];
+    if (!ok) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersRegister"
+                                 message:err.localizedDescription ?: @"register failed"
+                                 details:nil]);
+      return;
+    }
+    result(nil);
+  } else if ([@"outgoingVideoFiltersUnregister" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    NSString* filterId = argsMap[@"filterId"];
+    id<LocalTrack> track = [_localTracks objectForKey:trackId];
+    if (![track isKindOfClass:[LocalVideoTrack class]]) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersUnregister"
+                                 message:@"track not found or not a local video track"
+                                 details:nil]);
+      return;
+    }
+    LocalVideoTrack* lvt = (LocalVideoTrack*)track;
+    if (lvt.processing != nil) {
+      [lvt.processing.outgoingFilterEngine unregisterFilterWithId:filterId];
+    }
+    result(nil);
+  } else if ([@"outgoingVideoFiltersSetEnabled" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    NSString* filterId = argsMap[@"filterId"];
+    NSNumber* enabledNum = argsMap[@"enabled"];
+    id<LocalTrack> track = [_localTracks objectForKey:trackId];
+    if (![track isKindOfClass:[LocalVideoTrack class]]) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersSetEnabled"
+                                 message:@"track not found or not a local video track"
+                                 details:nil]);
+      return;
+    }
+    LocalVideoTrack* lvt = (LocalVideoTrack*)track;
+    if (lvt.processing == nil || enabledNum == nil) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersSetEnabled"
+                                 message:@"missing processing or enabled"
+                                 details:nil]);
+      return;
+    }
+    BOOL ok = [lvt.processing.outgoingFilterEngine setFilterId:filterId enabled:enabledNum.boolValue];
+    if (!ok) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersSetEnabled"
+                                 message:@"filter not registered"
+                                 details:nil]);
+      return;
+    }
+    result(nil);
+  } else if ([@"outgoingVideoFiltersUpdateConfig" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    NSString* filterId = argsMap[@"filterId"];
+    NSDictionary* config = argsMap[@"config"];
+    id<LocalTrack> track = [_localTracks objectForKey:trackId];
+    if (![track isKindOfClass:[LocalVideoTrack class]]) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersUpdateConfig"
+                                 message:@"track not found or not a local video track"
+                                 details:nil]);
+      return;
+    }
+    LocalVideoTrack* lvt = (LocalVideoTrack*)track;
+    if (lvt.processing == nil) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersUpdateConfig"
+                                 message:@"VideoProcessingAdapter missing"
+                                 details:nil]);
+      return;
+    }
+    BOOL ok = [lvt.processing.outgoingFilterEngine updateConfig:config forFilterId:filterId];
+    if (!ok) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersUpdateConfig"
+                                 message:@"filter not registered"
+                                 details:nil]);
+      return;
+    }
+    result(nil);
+  } else if ([@"outgoingVideoFiltersClear" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    id<LocalTrack> track = [_localTracks objectForKey:trackId];
+    if (![track isKindOfClass:[LocalVideoTrack class]]) {
+      result([FlutterError errorWithCode:@"outgoingVideoFiltersClear"
+                                 message:@"track not found or not a local video track"
+                                 details:nil]);
+      return;
+    }
+    LocalVideoTrack* lvt = (LocalVideoTrack*)track;
+    if (lvt.processing != nil) {
+      [lvt.processing.outgoingFilterEngine clearAll];
     }
     result(nil);
   } else if ([@"restartIce" isEqualToString:call.method]) {

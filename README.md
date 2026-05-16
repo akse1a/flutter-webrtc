@@ -23,6 +23,52 @@ Enterprise Grade APIs for Feeds, Chat, & Video. <a href="https://getstream.io/vi
    <a href="https://livekit.io/?utm_source=opencollective&utm_medium=github&utm_campaign=flutter-webrtc" target="_blank">LiveKit</a> - Open source WebRTC and realtime AI infrastructure
 <p>
 
+## Outgoing video filters (this fork)
+
+Local camera (and other capturers wired through `VideoProcessingAdapter` / `LocalVideoTrack`) can run an **ordered chain** of CPU filters **before** frames reach the WebRTC encoder. The first built-in filter is full-frame box blur (`whole_frame_blur`). CPU blur is intentionally run after a **nearest-neighbour downscale** (default `0.25`) to keep cost manageable; see native comments for a **GPU** TODO without changing the Dart API.
+
+### Method channel (`FlutterWebRTC.Method`)
+
+| Method | Arguments |
+|--------|-----------|
+| `outgoingVideoFiltersRegister` | `trackId`, `filterId`, optional `config` map |
+| `outgoingVideoFiltersUnregister` | `trackId`, `filterId` |
+| `outgoingVideoFiltersSetEnabled` | `trackId`, `filterId`, `enabled` |
+| `outgoingVideoFiltersUpdateConfig` | `trackId`, `filterId`, `config` map |
+| `outgoingVideoFiltersClear` | `trackId` |
+
+On **Web and desktop**, `OutgoingVideoFilterController` does **not** call the channel (no-op). On **Android / iOS**, filters are cleared automatically when the local track is disposed (`trackDispose`).
+
+### Dart
+
+```dart
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+
+// After getUserMedia, use the video track's id:
+await OutgoingVideoFilterController.registerBlur(videoTrack.id, config: {
+  'radius': 6,
+  'downscale': 0.25,
+});
+await OutgoingVideoFilterController.setBlurEnabled(videoTrack.id, true);
+// ...
+await OutgoingVideoFilterController.clear(videoTrack.id);
+```
+
+### Frame path
+
+```text
+Camera capturer → VideoProcessingAdapter (iOS) / VideoProcessor (Android LocalVideoTrack)
+  → outgoing filter engine (ordered, per-filter enable flags)
+  → existing ExternalVideoProcessing / processors
+  → WebRTC video source / sink (encoder)
+```
+
+### Manual QA checklist (PR)
+
+- 5+ minute call: no steady memory growth, no crash.
+- Toggle blur on/off at least 20 times.
+- If the example app switches camera, repeat blur toggle after switch.
+
 ## Functionality
 
 | Feature | Android | iOS | [Web](https://flutter.dev/web) | macOS | Windows | Linux | [Embedded](https://github.com/sony/flutter-elinux) | [Fuchsia](https://fuchsia.dev/) |

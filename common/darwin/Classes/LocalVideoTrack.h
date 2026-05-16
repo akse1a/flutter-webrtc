@@ -21,4 +21,7 @@
 
 - (void)removeProcessing:(_Nonnull id<ExternalVideoProcessingDelegate>)processor;
 
+/** Removes all outgoing (pre-encode) filters registered via the Flutter method channel. */
+- (void)clearOutgoingVideoFilters;
+
 @end

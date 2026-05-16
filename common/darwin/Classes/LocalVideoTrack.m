@@ -44,4 +44,10 @@
   [_processing removeProcessing:processor];
 }
 
+- (void)clearOutgoingVideoFilters {
+  if (_processing != nil) {
+    [_processing.outgoingFilterEngine clearAll];
+  }
+}
+
 @end

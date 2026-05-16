@@ -664,6 +664,26 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         result.success(null);
         break;
       }
+      case "outgoingVideoFiltersRegister": {
+        outgoingVideoFiltersRegister(call, result);
+        break;
+      }
+      case "outgoingVideoFiltersUnregister": {
+        outgoingVideoFiltersUnregister(call, result);
+        break;
+      }
+      case "outgoingVideoFiltersSetEnabled": {
+        outgoingVideoFiltersSetEnabled(call, result);
+        break;
+      }
+      case "outgoingVideoFiltersUpdateConfig": {
+        outgoingVideoFiltersUpdateConfig(call, result);
+        break;
+      }
+      case "outgoingVideoFiltersClear": {
+        outgoingVideoFiltersClear(call, result);
+        break;
+      }
       case "restartIce": {
         String peerConnectionId = call.argument("peerConnectionId");
         restartIce(peerConnectionId);
@@ -1751,11 +1771,111 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     removeTrackForRendererById(trackId);
     track.setEnabled(false);
     if (track instanceof LocalVideoTrack) {
+      ((LocalVideoTrack) track).releaseOutgoingVideoFilters();
       getUserMediaImpl.removeVideoCapturer(trackId);
     }
     synchronized (localTracks) {
       localTracks.remove(trackId);
     }
+  }
+
+  private void outgoingVideoFiltersRegister(MethodCall call, Result result) {
+    String trackId = call.argument("trackId");
+    String filterId = call.argument("filterId");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> config = call.argument("config");
+    LocalTrack lt;
+    synchronized (localTracks) {
+      lt = localTracks.get(trackId);
+    }
+    if (!(lt instanceof LocalVideoTrack)) {
+      resultError("outgoingVideoFiltersRegister", "track not found or not a local video track", result);
+      return;
+    }
+    if (filterId == null || filterId.isEmpty()) {
+      resultError("outgoingVideoFiltersRegister", "filterId is required", result);
+      return;
+    }
+    boolean ok = ((LocalVideoTrack) lt).getOutgoingVideoFilters().register(filterId, config);
+    if (!ok) {
+      resultError("outgoingVideoFiltersRegister", "unknown filterId: " + filterId, result);
+      return;
+    }
+    result.success(null);
+  }
+
+  private void outgoingVideoFiltersUnregister(MethodCall call, Result result) {
+    String trackId = call.argument("trackId");
+    String filterId = call.argument("filterId");
+    LocalTrack lt;
+    synchronized (localTracks) {
+      lt = localTracks.get(trackId);
+    }
+    if (!(lt instanceof LocalVideoTrack)) {
+      resultError("outgoingVideoFiltersUnregister", "track not found or not a local video track", result);
+      return;
+    }
+    ((LocalVideoTrack) lt).getOutgoingVideoFilters().unregister(filterId);
+    result.success(null);
+  }
+
+  private void outgoingVideoFiltersSetEnabled(MethodCall call, Result result) {
+    String trackId = call.argument("trackId");
+    String filterId = call.argument("filterId");
+    Boolean enabled = call.argument("enabled");
+    LocalTrack lt;
+    synchronized (localTracks) {
+      lt = localTracks.get(trackId);
+    }
+    if (!(lt instanceof LocalVideoTrack)) {
+      resultError("outgoingVideoFiltersSetEnabled", "track not found or not a local video track", result);
+      return;
+    }
+    if (enabled == null) {
+      resultError("outgoingVideoFiltersSetEnabled", "enabled is required", result);
+      return;
+    }
+    boolean ok = ((LocalVideoTrack) lt).getOutgoingVideoFilters().setEnabled(filterId, enabled);
+    if (!ok) {
+      resultError("outgoingVideoFiltersSetEnabled", "filter not registered: " + filterId, result);
+      return;
+    }
+    result.success(null);
+  }
+
+  private void outgoingVideoFiltersUpdateConfig(MethodCall call, Result result) {
+    String trackId = call.argument("trackId");
+    String filterId = call.argument("filterId");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> config = call.argument("config");
+    LocalTrack lt;
+    synchronized (localTracks) {
+      lt = localTracks.get(trackId);
+    }
+    if (!(lt instanceof LocalVideoTrack)) {
+      resultError("outgoingVideoFiltersUpdateConfig", "track not found or not a local video track", result);
+      return;
+    }
+    boolean ok = ((LocalVideoTrack) lt).getOutgoingVideoFilters().updateConfig(filterId, config);
+    if (!ok) {
+      resultError("outgoingVideoFiltersUpdateConfig", "filter not registered: " + filterId, result);
+      return;
+    }
+    result.success(null);
+  }
+
+  private void outgoingVideoFiltersClear(MethodCall call, Result result) {
+    String trackId = call.argument("trackId");
+    LocalTrack lt;
+    synchronized (localTracks) {
+      lt = localTracks.get(trackId);
+    }
+    if (!(lt instanceof LocalVideoTrack)) {
+      resultError("outgoingVideoFiltersClear", "track not found or not a local video track", result);
+      return;
+    }
+    ((LocalVideoTrack) lt).getOutgoingVideoFilters().clear();
+    result.success(null);
   }
 
   public void mediaStreamTrackSetEnabled(final String id, final boolean enabled, String peerConnectionId) {

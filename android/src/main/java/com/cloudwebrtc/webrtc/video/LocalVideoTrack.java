@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LocalVideoTrack extends LocalTrack implements VideoProcessor {
+    private final OutgoingVideoFiltersController outgoingVideoFilters = new OutgoingVideoFiltersController();
+
     public interface ExternalVideoFrameProcessing {
         /**
          * Process a video frame.
@@ -40,6 +42,14 @@ public class LocalVideoTrack extends LocalTrack implements VideoProcessor {
         }
     }
 
+    public OutgoingVideoFiltersController getOutgoingVideoFilters() {
+        return outgoingVideoFilters;
+    }
+
+    public void releaseOutgoingVideoFilters() {
+        outgoingVideoFilters.clear();
+    }
+
     private VideoSink sink = null;
 
     @Override
@@ -56,6 +66,7 @@ public class LocalVideoTrack extends LocalTrack implements VideoProcessor {
     @Override
     public void onFrameCaptured(VideoFrame videoFrame) {
         if (sink != null) {
+            videoFrame = outgoingVideoFilters.apply(videoFrame);
             synchronized (processors) {
                 for (ExternalVideoFrameProcessing processor : processors) {
                     videoFrame = processor.onFrame(videoFrame);
