@@ -79,9 +79,8 @@ public class LocalVideoTrack extends LocalTrack implements VideoProcessor {
                     }
                 }
             }
-            if (out != in) {
-                in.release();
-            }
+            // Do not call in.release(): [VideoProcessor] default onFrameCaptured(frame, parameters)
+            // invokes this 1-arg overload then releases the adapted frame itself (see VideoProcessor.java).
             sink.onFrame(out);
         }
     }
