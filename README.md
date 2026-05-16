@@ -39,18 +39,52 @@ Local camera (and other capturers wired through `VideoProcessingAdapter` / `Loca
 
 On **Web and desktop**, `OutgoingVideoFilterController` does **not** call the channel (no-op). On **Android / iOS**, filters are cleared automatically when the local track is disposed (`trackDispose`).
 
-### Dart
+### How to use (step by step)
+
+1. **Platforms** — outgoing filters run only on **Android** and **iOS**. On Web, Windows, macOS, and Linux the Dart API returns immediately without calling native code (safe no-op).
+2. **Obtain a local video track** — e.g. `navigator.mediaDevices.getUserMedia(...)` and take the first video track from the returned `MediaStream`.
+3. **Use the track id** — pass `MediaStreamTrack.id` (the same id the plugin uses for `trackDispose` / camera switching). It must be the **local** camera (or another capturer wired through the same native pipeline).
+4. **Register the blur filter** (optional `config` on first register or via `updateBlurConfig` later):
+
+   | Config key   | Type   | Meaning |
+   | ------------ | ------ | ------- |
+   | `radius`     | int    | Box-blur strength on the downscaled frame; clamped **1–32** (default **4**). |
+   | `sigma`      | num    | Alternative to `radius`; mapped to the same internal radius (rounded). |
+   | `downscale`  | double | Fraction **(0.1, 1.0]** of width/height before blur (default **0.25**). Lower = faster, more blocky upscale; higher = heavier CPU. |
+
+5. **Turn blur on or off** without unregistering: `OutgoingVideoFilterController.setBlurEnabled(trackId, false)` — cheap (atomic flag on native side).
+6. **Adjust strength** while registered: `updateBlurConfig(trackId, { 'radius': 8, 'downscale': 0.35 })`.
+7. **Remove the filter** — `unregisterBlur(trackId)` removes only blur, or `clear(trackId)` / `disposeForTrack(trackId)` removes **all** outgoing filters for that track.
+8. **Lifecycle** — when the track is stopped/disposed (`track.stop()` in Dart → native `trackDispose`), filters are cleared automatically; you can still call `clear` earlier if you switch UI state before dispose.
+
+**Raw channel (optional):** you can call `WebRTC.invokeMethod` with the method names in the table above and the same argument maps if you do not want the `OutgoingVideoFilterController` wrapper. Filter id for blur must match `OutgoingVideoFilterIds.wholeFrameBlur` (`"whole_frame_blur"`).
+
+### Dart example
 
 ```dart
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-// After getUserMedia, use the video track's id:
+final stream = await navigator.mediaDevices.getUserMedia({
+  'video': true,
+  'audio': true,
+});
+final videoTrack = stream.getVideoTracks().first;
+
 await OutgoingVideoFilterController.registerBlur(videoTrack.id, config: {
   'radius': 6,
   'downscale': 0.25,
 });
 await OutgoingVideoFilterController.setBlurEnabled(videoTrack.id, true);
-// ...
+
+// Later: softer look → slightly higher downscale + radius
+await OutgoingVideoFilterController.updateBlurConfig(videoTrack.id, {
+  'radius': 5,
+  'downscale': 0.4,
+});
+
+await OutgoingVideoFilterController.setBlurEnabled(videoTrack.id, false);
+
+// When done (or rely on track.stop() to clear native filters)
 await OutgoingVideoFilterController.clear(videoTrack.id);
 ```
 
